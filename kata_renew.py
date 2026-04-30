@@ -194,14 +194,57 @@ async def renew_user(page, user):
 
         # 登录前 Turnstile
         log("  >> 登录页 Turnstile...")
-        for _ in range(15):
-            if await cdp_click_turnstile(page):
+        turnstile_ok = False
+        for tAttempt in range(3):
+            # 尝试点击 Turnstile
+            for _ in range(15):
+                if await cdp_click_turnstile(page):
+                    break
+                await page.wait_for_timeout(1000)
+            # 等待验证完成
+            if await wait_turnstile_ok(page, 15):
+                turnstile_ok = True
                 break
-            await page.wait_for_timeout(1000)
-        await wait_turnstile_ok(page, 10)
+            log(f"  >> Turnstile 第 {tAttempt+1}/3 次尝试失败，刷新...")
+            await page.reload()
+            await page.wait_for_timeout(3000)
+            # 重新填表
+            try:
+                await page.get_by_role("textbox", name="Email").fill(username)
+                await page.get_by_role("textbox", name="Password").fill(password)
+            except Exception:
+                pass
+        
+        if not turnstile_ok:
+            log("  ⚠️ Turnstile 未确认成功，尝试继续登录...")
 
         # 登录
         await page.get_by_role("button", name="Login", exact=True).click()
+        await page.wait_for_timeout(3000)
+        
+        # 检查是否还在登录页 (Turnstile 失败)
+        if "login" in page.url and "error=captcha" in page.url:
+            log("  ⚠️ 登录被 Turnstile 拦截，刷新重试...")
+            await page.reload()
+            await page.wait_for_timeout(3000)
+            await page.get_by_role("textbox", name="Email").fill(username)
+            await page.get_by_role("textbox", name="Password").fill(password)
+            # 再尝试 Turnstile
+            for _ in range(20):
+                if await cdp_click_turnstile(page):
+                    break
+                await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(5000)
+            await page.get_by_role("button", name="Login", exact=True).click()
+            await page.wait_for_timeout(3000)
+
+        # 如果仍在登录页
+        if "login" in page.url:
+            log("  ❌ 无法通过登录页")
+            shot = str(SCREENSHOT_DIR / f"{safe}_login_stuck.png")
+            await page.screenshot(path=shot, full_page=True)
+            send_tg(f"❌ *KataBump 登录失败*\n用户: `{username}`\n原因: 无法通过 Turnstile", shot)
+            return False
 
         # 检查密码错误
         try:
