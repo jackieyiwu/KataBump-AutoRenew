@@ -270,24 +270,27 @@ async def renew_user(page, user):
                 await renew_btn.wait_for(state="visible", timeout=5000)
             except Exception:
                 # 没有 Renew 按钮可能意味着不需要续期
-                # 检查页面是否有到期时间信息
                 try:
-                    # KataBump 在 Overview 页面显示到期时间
                     page_text = await page.inner_text("body")
-                    if "Expires" in page_text or "expires" in page_text or "expir" in page_text.lower():
-                        # 提取到期时间
-                        exp_match = re.search(r'[Ee]xpir\w*\s*:?\s*(\d{4}[-/]\d{2}[-/]\d{2}[\s\w:]*)', page_text)
-                        if exp_match:
-                            log(f"  ⏳ 服务器暂不需要续期 (到期: {exp_match.group(1).strip()})")
-                        else:
-                            log("  ⏳ 服务器暂不需要续期 (无 Renew 按钮)")
+                    # 匹配多种格式: "Expires on 2026-05-04", "expir: 2026/05/04" 等
+                    exp_match = re.search(r'[Ee]xpir[^"]*?(\d{4}[-/]\d{2}[-/]\d{2}\s*\d{0,2}[:\d]*)', page_text)
+                    if exp_match:
+                        exp_date = exp_match.group(1).strip()
+                        log(f"  ⏳ 服务器暂不需要续期 (到期: {exp_date})")
+                        shot = str(SCREENSHOT_DIR / f"{safe}_no_renew.png")
+                        await page.screenshot(path=shot, full_page=True)
+                        send_tg(f"⏳ *KataBump 暂无需续期*\n用户: `{username}`\n到期: `{exp_date}`", shot)
+                        return True  # 不需要续期 = 成功
+                    # 如果页面有服务器信息但无到期时间，也视为正常
+                    if "Overview" in page_text or "Settings" in page_text or "Console" in page_text:
+                        log("  ⏳ 在服务器页面但无 Renew 按钮，暂不需要续期")
                         shot = str(SCREENSHOT_DIR / f"{safe}_no_renew.png")
                         await page.screenshot(path=shot, full_page=True)
                         send_tg(f"⏳ *KataBump 暂无需续期*\n用户: `{username}`\n服务器正常，无需 Renew", shot)
-                        return True  # 算成功，不需要续期
-                except Exception:
-                    pass
-                log("无 Renew 按钮"); break
+                        return True
+                except Exception as e2:
+                    log(f"  检测页面内容失败: {e2}")
+                log("无 Renew 按钮，页面可能异常"); break
 
             await renew_btn.click()
             modal = page.locator("#renew-modal")
