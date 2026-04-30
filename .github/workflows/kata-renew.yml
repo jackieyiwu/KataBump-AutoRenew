@@ -3,7 +3,7 @@ name: 🔄 KataBump Auto Renew
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 2 * * *"  # 每天 UTC 02:30
+    - cron: "30 2 * * *"
 
 jobs:
   pre-check:
@@ -35,9 +35,8 @@ jobs:
 
     env:
       ACCOUNTS: ${{ secrets.ACCOUNTS }}
-      TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-      TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-      HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+      BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.TG_CHAT_ID }}
 
     steps:
       - name: 📥 Checkout
@@ -67,27 +66,11 @@ jobs:
           echo "Detected: $CHROME_VERSION"
           echo "CHROME_VERSION=$CHROME_VERSION" >> $GITHUB_ENV
 
-      - name: 🔌 Start Hysteria2 proxy
-        if: env.HY2_AUTH != ''
-        run: |
-          curl -L -o hysteria \
-            https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
-          chmod +x hysteria && sudo mv hysteria /usr/local/bin/
-          printf 'server: %s\nauth: %s\ntls:\n  sni: %s\n  insecure: true\n  alpn:\n    - h3\nsocks5:\n  listen: 127.0.0.1:51080\n' \
-            "${HY2_SERVER}" "${HY2_AUTH}" "${HY2_SNI}" > /tmp/hy2.yaml
-          nohup hysteria client -c /tmp/hy2.yaml > /tmp/hy2.log 2>&1 &
-          sleep 5
-          curl -x socks5h://127.0.0.1:51080 -s --connect-timeout 10 https://api.ipify.org && echo " ✅代理OK" || echo "❌代理失败"
-        env:
-          HY2_SERVER: ${{ secrets.HY2_SERVER }}
-          HY2_AUTH: ${{ secrets.HY2_AUTH }}
-          HY2_SNI: ${{ secrets.HY2_SNI }}
-
       - name: 🖥️ Start Xvfb
         run: Xvfb :99 -ac &
 
       - name: ⏳ Random delay
-        run: sleep $((RANDOM % 120))
+        run: sleep $((RANDOM % 60))
 
       - name: 🚀 Run Renew
         env:

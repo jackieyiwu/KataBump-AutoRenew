@@ -91,6 +91,7 @@ class KataBumpRenew:
         self.screenshot_path = None
 
     def setup_driver(self):
+        """每次调用都创建新的 Options (uc 不允许重用)"""
         opts = Options()
         if HEADLESS:
             opts.add_argument('--headless')
@@ -113,8 +114,19 @@ class KataBumpRenew:
                 return
             except Exception as e:
                 if self.driver:
-                    self.driver.quit()
+                    try: self.driver.quit()
+                    except: pass
                     self.driver = None
+                # uc 不允许重用 Options，重试时创建新的
+                opts = Options()
+                if HEADLESS:
+                    opts.add_argument('--headless')
+                opts.add_argument('--no-sandbox')
+                opts.add_argument('--disable-dev-shm-usage')
+                opts.add_argument('--disable-blink-features=AutomationControlled')
+                opts.add_argument('--remote-debugging-port=9222')
+                if PROXY_SERVER:
+                    opts.add_argument(f'--proxy-server={PROXY_SERVER}')
                 if v is None:
                     raise
 
@@ -289,17 +301,26 @@ class KataBumpRenew:
                     self.setup_driver()
                 if attempt > 0:
                     logger.info(f"🔄 {self.masked} 第 {attempt+1} 次尝试...")
-                    self.driver.refresh()
+                    # 关闭旧 driver，重新创建
+                    try: self.driver.quit()
+                    except: pass
+                    self.driver = None
+                    self.setup_driver()
+                    self.driver.get("https://dashboard.katabump.com/auth/login")
                     sleep_ms(5000 + random.random() * 3000)
                 success, msg = self.process()
                 if success:
                     return True, msg
                 last_error = msg
-                if "续期失败" in msg:
+                if "续期失败" in msg or "已过期" in msg:
                     break
             except Exception as e:
                 last_error = str(e)[:80]
                 logger.error(f"❌ {self.masked} 第 {attempt+1} 次: {e}")
+                if self.driver:
+                    try: self.driver.quit()
+                    except: pass
+                    self.driver = None
                 if attempt < max_retries - 1:
                     sleep_ms(5000 + random.random() * 5000)
 
