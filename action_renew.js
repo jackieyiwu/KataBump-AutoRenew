@@ -151,10 +151,10 @@ async function cdpClick(page) {
     return false;
 }
 
-// --- xdotool Click Turnstile (fallback) ---
+// --- xdotool Click Turnstile (human-like) ---
 async function xdotoolClick(page) {
     try {
-        // Get Turnstile iframe position
+        const { execSync } = require('child_process');
         const frames = page.frames();
         for (const frame of frames) {
             const data = await frame.evaluate(() => window.__turnstile_data).catch(() => null);
@@ -163,21 +163,34 @@ async function xdotoolClick(page) {
             const box = await el.boundingBox();
             if (!box) continue;
             
-            const cx = Math.round(box.x + box.width * data.xRatio);
-            const cy = Math.round(box.y + box.height * data.yRatio);
-            console.log('  >> xdotool 点击: (' + cx + ', ' + cy + ')');
+            // 在 checkbox 区域内添加随机偏移 (更人类化)
+            const jitterX = Math.round((Math.random() - 0.5) * 10);
+            const jitterY = Math.round((Math.random() - 0.5) * 10);
+            const cx = Math.round(box.x + box.width * data.xRatio) + jitterX;
+            const cy = Math.round(box.y + box.height * data.yRatio) + jitterY;
             
-            // Move mouse naturally then click
-            const { execSync } = require('child_process');
-            // Move in steps
-            execSync('xdotool mousemove ' + cx + ' ' + cy);
-            await page.waitForTimeout(200 + Math.random() * 300);
-            execSync('xdotool click 1');
-            console.log('  >> xdotool 点击已发送');
+            console.log('  >> xdotool 目标: (' + cx + ', ' + cy + ')');
+            
+            // 1. 先移动到附近位置 (模拟人类从远处移动鼠标)
+            const startX = cx - 50 - Math.floor(Math.random() * 100);
+            const startY = cy - 20 - Math.floor(Math.random() * 40);
+            execSync('xdotool mousemove ' + startX + ' ' + startY);
+            await page.waitForTimeout(100 + Math.floor(Math.random() * 200));
+            
+            // 2. 缓慢移动到目标位置
+            execSync('xdotool mousemove --step 5 --delay 10 ' + cx + ' ' + cy);
+            await page.waitForTimeout(50 + Math.floor(Math.random() * 150));
+            
+            // 3. 点击 (按住一小段时间再松开)
+            execSync('xdotool mousedown 1');
+            await page.waitForTimeout(30 + Math.floor(Math.random() * 70));
+            execSync('xdotool mouseup 1');
+            
+            console.log('  >> xdotool 点击完成 (人类模拟)');
             return true;
         }
     } catch (e) {
-        console.log('  >> xdotool 点击失败:', e.message);
+        console.log('  >> xdotool 失败:', e.message);
     }
     return false;
 }
