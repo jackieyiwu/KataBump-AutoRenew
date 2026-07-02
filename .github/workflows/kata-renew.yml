@@ -31,7 +31,10 @@ jobs:
     needs: pre-check
     if: needs.pre-check.outputs.should_run != 'false'
     runs-on: ubuntu-22.04
+    permissions:             # <--- 必须添加
+      contents: write        # <--- 允许写入仓库
     timeout-minutes: 30
+    # ...
 
     env:
       ACCOUNTS: ${{ secrets.ACCOUNTS }}
